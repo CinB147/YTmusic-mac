@@ -26,7 +26,7 @@ struct ContentView: View {
             }
             Divider().overlay(Color.white.opacity(0.08))
             PlayerBar()
-                .frame(height: 84)
+                .frame(height: 92)
         }
         .background(Theme.base)
         .ignoresSafeArea()
@@ -167,12 +167,13 @@ struct PlayerBar: View {
     @EnvironmentObject var player: Player
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 20) {
             NowPlaying().frame(maxWidth: .infinity, alignment: .leading)
-            Transport().frame(maxWidth: 560)
+            Transport().frame(minWidth: 320, maxWidth: 600)
             Extras().frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 18)
+        .frame(maxHeight: .infinity)
         .background(Theme.bar)
     }
 }
@@ -181,20 +182,22 @@ struct NowPlaying: View {
     @EnvironmentObject var player: Player
 
     var body: some View {
-        HStack(spacing: 12) {
-            Artwork(url: player.artwork, size: 56, radius: 4)
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 14) {
+            Artwork(url: player.artwork, size: 58, radius: 6)
+            VStack(alignment: .leading, spacing: 4) {
                 Text(player.hasTrack ? player.title : "Nothing playing")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                Text(player.artist)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.secondary)
-                    .lineLimit(1)
+                if !player.artist.isEmpty {
+                    Text(player.artist)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.secondary)
+                        .lineLimit(1)
+                }
             }
             if player.hasTrack {
-                IconButton(symbol: player.liked ? "heart.fill" : "heart", size: 14,
+                IconButton(symbol: player.liked ? "heart.fill" : "heart", size: 17, box: 34,
                            tint: player.liked ? Theme.accent : Theme.secondary) { player.toggleLike() }
             }
         }
@@ -206,28 +209,20 @@ struct Transport: View {
     @State private var scrub: Double?
 
     var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 18) {
-                IconButton(symbol: "shuffle", size: 13,
-                           tint: player.shuffle ? Theme.accent : Theme.secondary) { player.toggleShuffle() }
-                IconButton(symbol: "backward.end.fill", size: 16) { player.previous() }
-                Button { player.togglePlay() } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.black)
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white))
-                }
-                .buttonStyle(.plain)
-                IconButton(symbol: "forward.end.fill", size: 16) { player.next() }
-                IconButton(symbol: player.repeatMode == "ONE" ? "repeat.1" : "repeat", size: 13,
-                           tint: player.repeatMode == "NONE" ? Theme.secondary : Theme.accent) { player.toggleRepeat() }
+        VStack(spacing: 6) {
+            HStack(spacing: 14) {
+                ToggleIcon(symbol: "shuffle", isOn: player.shuffle) { player.toggleShuffle() }
+                IconButton(symbol: "backward.end.fill", size: 20, box: 38, tint: .white.opacity(0.85)) { player.previous() }
+                PlayButton(isPlaying: player.isPlaying) { player.togglePlay() }
+                IconButton(symbol: "forward.end.fill", size: 20, box: 38, tint: .white.opacity(0.85)) { player.next() }
+                ToggleIcon(symbol: player.repeatMode == "ONE" ? "repeat.1" : "repeat",
+                           isOn: player.repeatMode != "NONE") { player.toggleRepeat() }
             }
-            HStack(spacing: 8) {
-                TimeLabel(seconds: scrub ?? player.position)
-                Slider(
+            HStack(spacing: 10) {
+                TimeLabel(seconds: scrub ?? player.position, alignment: .trailing)
+                BarSlider(
                     value: Binding(get: { scrub ?? player.position }, set: { scrub = $0 }),
-                    in: 0...max(player.duration, 1),
+                    range: 0...max(player.duration, 1),
                     onEditingChanged: { editing in
                         if !editing, let target = scrub {
                             player.seek(to: target)
@@ -235,10 +230,8 @@ struct Transport: View {
                         }
                     }
                 )
-                .controlSize(.mini)
-                .tint(Theme.accent)
                 .disabled(player.duration <= 0)
-                TimeLabel(seconds: player.duration)
+                TimeLabel(seconds: player.duration, alignment: .leading)
             }
         }
     }
@@ -248,19 +241,110 @@ struct Extras: View {
     @EnvironmentObject var player: Player
 
     var body: some View {
-        HStack(spacing: 10) {
-            IconButton(symbol: "list.bullet", size: 14,
+        HStack(spacing: 12) {
+            IconButton(symbol: "list.bullet", size: 16, box: 34,
                        tint: player.playerOpen ? Theme.accent : Theme.secondary) { player.toggleQueue() }
                 .help("Queue / now playing")
-            Image(systemName: player.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.secondary)
-                .frame(width: 20)
-            Slider(value: Binding(get: { player.volume }, set: { player.setVolume($0) }), in: 0...1)
-                .controlSize(.mini)
-                .tint(Theme.accent)
-                .frame(width: 100)
+            HStack(spacing: 8) {
+                Image(systemName: volumeSymbol)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.secondary)
+                    .frame(width: 22, alignment: .leading)
+                BarSlider(value: Binding(get: { player.volume }, set: { player.setVolume($0) }), range: 0...1)
+                    .frame(width: 96)
+            }
         }
+    }
+
+    private var volumeSymbol: String {
+        switch player.volume {
+        case 0: return "speaker.slash.fill"
+        case ..<0.34: return "speaker.wave.1.fill"
+        case ..<0.67: return "speaker.wave.2.fill"
+        default: return "speaker.wave.3.fill"
+        }
+    }
+}
+
+struct PlayButton: View {
+    let isPlaying: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(.black)
+                .offset(x: isPlaying ? 0 : 1.5)   // optically centre the triangle
+                .frame(width: 42, height: 42)
+                .background(Circle().fill(Color.white))
+                .scaleEffect(hovering ? 1.06 : 1)
+                .animation(.easeOut(duration: 0.12), value: hovering)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// Shuffle / repeat: green with a dot underneath when active.
+struct ToggleIcon: View {
+    let symbol: String
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        IconButton(symbol: symbol, size: 16, box: 34, tint: isOn ? Theme.accent : Theme.secondary, action: action)
+            .overlay(alignment: .bottom) {
+                Circle().fill(Theme.accent).frame(width: 4, height: 4).opacity(isOn ? 1 : 0)
+            }
+    }
+}
+
+/// Thin progress-style slider; the knob appears on hover or drag.
+struct BarSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var onEditingChanged: (Bool) -> Void = { _ in }
+    @State private var hovering = false
+    @State private var dragging = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        GeometryReader { geo in
+            let span = max(range.upperBound - range.lowerBound, 0.0001)
+            let fraction = min(max((value - range.lowerBound) / span, 0), 1)
+            let active = (hovering || dragging) && isEnabled
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.2)).frame(height: 4)
+                Capsule().fill(active ? Theme.accent : Color.white.opacity(0.9))
+                    .frame(width: geo.size.width * fraction, height: 4)
+                Circle().fill(Color.white)
+                    .frame(width: 12, height: 12)
+                    .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+                    .offset(x: (geo.size.width - 12) * fraction)
+                    .opacity(active ? 1 : 0)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        if !dragging {
+                            dragging = true
+                            onEditingChanged(true)
+                        }
+                        let x = min(max(gesture.location.x / max(geo.size.width, 1), 0), 1)
+                        value = range.lowerBound + span * x
+                    }
+                    .onEnded { _ in
+                        dragging = false
+                        onEditingChanged(false)
+                    }
+            )
+            .onHover { hovering = $0 }
+        }
+        .frame(height: 16)
     }
 }
 
@@ -268,13 +352,14 @@ struct Extras: View {
 
 struct TimeLabel: View {
     let seconds: Double
+    var alignment: Alignment = .center
 
     var body: some View {
         let total = Int(seconds.isFinite ? max(seconds, 0) : 0)
         Text(String(format: "%d:%02d", total / 60, total % 60))
-            .font(.system(size: 11).monospacedDigit())
+            .font(.system(size: 11, weight: .medium).monospacedDigit())
             .foregroundStyle(Theme.secondary)
-            .frame(width: 38)
+            .frame(width: 40, alignment: alignment)
     }
 }
 
@@ -302,6 +387,7 @@ struct Artwork: View {
 struct IconButton: View {
     let symbol: String
     let size: CGFloat
+    var box: CGFloat = 28
     var tint: Color = Theme.secondary
     let action: () -> Void
     @State private var hovering = false
@@ -310,8 +396,8 @@ struct IconButton: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: .semibold))
-                .foregroundStyle(hovering && tint == Theme.secondary ? Color.white : tint)
-                .frame(width: 28, height: 28)
+                .foregroundStyle(hovering && tint != Theme.accent ? Color.white : tint)
+                .frame(width: box, height: box)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

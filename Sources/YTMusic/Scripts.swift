@@ -20,6 +20,15 @@ enum Scripts {
       height: 0 !important; min-height: 0 !important; overflow: hidden !important;
     }
     ytmusic-nav-bar { left: 0 !important; width: 100% !important; }
+    /* The site's Song/Video switch set to Song: some tracks only exist as a music video and keep
+       showing it, so hide the video (it keeps playing) and show the cover art instead. */
+    ytmusic-player[playback-mode="ATV_PREFERRED"] #song-video { opacity: 0 !important; pointer-events: none !important; }
+    ytmusic-player[playback-mode="ATV_PREFERRED"] {
+      background: var(--ytm-cover, none) center / contain no-repeat !important;
+    }
+    ytmusic-player[playback-mode="ATV_PREFERRED"][player-ui-state="MINIPLAYER"] {
+      opacity: 0 !important; pointer-events: none !important;
+    }
     html, body, ytmusic-app { background: #121212 !important; }
     ::-webkit-scrollbar { width: 10px; }
     ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 5px; }
@@ -119,7 +128,33 @@ enum Scripts {
           path: location.pathname + location.search
         };
       }
-      setInterval(() => post('state', readState()), 500);
+
+      // ---- song (cover art) / video mode, driven by the site's own switch ----
+      try { localStorage.removeItem('ytm-audio-only'); } catch (e) {}
+      let coverArt = null, lowQuality = 0;
+      function applyMode(state) {
+        if (state.art !== coverArt) {
+          coverArt = state.art;
+          document.documentElement.style.setProperty('--ytm-cover', coverArt ? 'url("' + coverArt + '")' : 'none');
+        }
+        // No point streaming HD frames nobody sees.
+        const player = $('ytmusic-player'), mp = $('#movie_player');
+        if (!player || !mp || !mp.setPlaybackQualityRange || !mp.getPlaybackQuality) return;
+        try {
+          const songMode = player.getAttribute('playback-mode') === 'ATV_PREFERRED';
+          const quality = mp.getPlaybackQuality();
+          if (songMode && quality && quality !== 'tiny' && quality !== 'unknown') {
+            mp.setPlaybackQualityRange('tiny', 'tiny');
+            lowQuality = 12;
+          } else if (!songMode && lowQuality > 0) {
+            // Repeat for a few seconds: the switch reloads the stream, which can swallow a single call.
+            mp.setPlaybackQualityRange('auto', 'auto');
+            lowQuality--;
+          }
+        } catch (e) {}
+      }
+
+      setInterval(() => { const state = readState(); applyMode(state); post('state', state); }, 500);
 
       // ---- library playlists (InnerTube, using the page's own session) ----
       async function authHeader() {

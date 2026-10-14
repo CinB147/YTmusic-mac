@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import WebKit
 
 /// Dev aid: `YTM_SELFTEST=<dir>` runs `<dir>/test.js` in the page after load,
@@ -26,6 +27,13 @@ enum SelfTest {
                let tiff = image.tiffRepresentation,
                let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
                 try? png.write(to: base.appendingPathComponent("web.png"))
+            }
+            let bar = ImageRenderer(content: PlayerBar().environmentObject(player)
+                .frame(width: 1280, height: 92).environment(\.colorScheme, .dark))
+            bar.scale = 2
+            if let tiff = bar.nsImage?.tiffRepresentation,
+               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                try? png.write(to: base.appendingPathComponent("bar.png"))
             }
             if let window = NSApp.windows.first(where: { $0.isVisible }) {
                 try? "\(window.windowNumber)".write(to: base.appendingPathComponent("window.txt"), atomically: true, encoding: .utf8)
